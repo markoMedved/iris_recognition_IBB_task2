@@ -11,11 +11,11 @@ def main(cfg):
 
     irisRec = irisRecognition(cfg)
 
-    if not os.path.exists('./dataProcessed/'):
-        os.mkdir('./dataProcessed/')
+    if not os.path.exists('./dataProcessedIBB/'):
+        os.mkdir('./dataProcessedIBB/')
     
-    if not os.path.exists('./templates/'):
-        os.mkdir('./templates/')
+    if not os.path.exists('./templatesIBB/'):
+        os.mkdir('./templatesIBB/')
 
     # Get the list of images to process
     filename_list = []
@@ -46,33 +46,38 @@ def main(cfg):
         polar_mask_list.append(mask_polar)
 
         # human-driven BSIF encoding:
-        code = irisRec.extractCode(im_polar)
+        #code = irisRec.extractCode(im_polar)
         # TODO:
-        # code = irisRec.extractIBBCode(im_polar)  #[, mask]) < masks are up to you where to use them
+        code = irisRec.extractIBBCode(im_polar,mask_polar)  #[, mask]) < masks are ups to you where to use them
 
         #print(code.shape)
         code_list.append(code)
 
         # DEBUG: save selected processing results
-        im_mask.save("./dataProcessed/" + os.path.splitext(fn)[0] + "_seg_mask.png")
-        imVis = irisRec.segmentVis(im,mask,pupil_xyr,iris_xyr)
-        path = "./dataProcessed/" + os.path.splitext(fn)[0]
-        cv2.imwrite(path + "_seg_vis.png",imVis)
-        cv2.imwrite(path + "_im_polar.png",im_polar)
-        cv2.imwrite(path + "_mask_polar.png",mask_polar)
-        np.savez_compressed("./templates/" + os.path.splitext(fn)[0] + "_tmpl.npz",code)
+        #im_mask.save("./dataProcessedIBB/" + os.path.splitext(fn)[0] + "_seg_mask.png")
+        #imVis = irisRec.segmentVis(im,mask,pupil_xyr,iris_xyr)
+        #path = "./dataProcessedIBB/" + os.path.splitext(fn)[0]
+        #cv2.imwrite(path + "_seg_vis.png",imVis)
+        #cv2.imwrite(path + "_im_polar.png",im_polar)
+        #cv2.imwrite(path + "_mask_polar.png",mask_polar)
+        #np.savez_compressed("./templatesIBB/" + os.path.splitext(fn)[0] + "_tmpl.npz",code)
         # for i in range(irisRec.num_filters):
             # cv2.imwrite(("%s_code_filter%d.png" % (path,i)),255*code[i,:,:])
 
     # Matching (all-vs-all, as an example)
-    for code1,mask1,fn1,i in zip(code_list,polar_mask_list,filename_list,range(len(code_list))):
-        for code2,mask2,fn2,j in zip(code_list,polar_mask_list,filename_list,range(len(code_list))):
-            if i < j:
-                score, shift = irisRec.matchCodesEfficient(code1, code2, mask1, mask2)
-                # TODO: 
-                # score = irisRec.matchIBBCodes(code1, code2) #[, mask1, mask2]) < masks are up to you where to use them
-                print("{} <-> {} : {:.3f} (mutual rot: {:.2f} deg)".format(fn1,fn2,score,360*shift/irisRec.polar_width))
-     
+    with open('resultsIBB.txt', 'w') as f:
+        for code1,mask1,fn1,i in zip(code_list,polar_mask_list,filename_list,range(len(code_list))):
+            for code2,mask2,fn2,j in zip(code_list,polar_mask_list,filename_list,range(len(code_list))):
+                if i < j:
+                    #score, shift = irisRec.matchCodesEfficient(code1, code2, mask1, mask2)
+                    # TODO: 
+                    score = irisRec.matchIBBCodes(code1, code2) #[, mask1, mask2]) < masks are up to you where to use them
+                    #print("{} <-> {} : {:.3f} (mutual rot: {:.2f} deg)".format(fn1,fn2,score,360*shift/irisRec.polar_width))
+                    print(fn1, fn2, score)
+                    
+                    #f.write("{} <-> {} : {:.3f} (mutual rot: {:.2f} deg)".format(fn1,fn2,score,360*shift/irisRec.polar_width))
+                    f.write(str(fn1)+" "+ str(fn2)+" "+ str(score))
+                    f.write("\n")
     return None
 
 if __name__ == "__main__":
