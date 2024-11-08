@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 result_location = "results2.txt"
@@ -23,9 +24,9 @@ current = ""
 for line in lines:
 
     if line.split('_s')[0].strip()  == line.split('>')[1].split('_s')[0].strip():
-        genuine.append(float(line.split(':')[1].split('(')[0]))
+        genuine.append(int(float(line.split(':')[1].split('(')[0])*1000))
     else :
-        impostors.append(float(line.split(':')[1].split('(')[0]))
+        impostors.append(int(float(line.split(':')[1].split('(')[0])*1000))
 
 
 classification_acc = []
@@ -44,11 +45,11 @@ for treshold in range(x,500,step):
     correctly_classified_imp = 0
     #count number of correctly classified genuines
     for el in genuine:
-        if el <= treshold/1000:
+        if el <= treshold:
             correctly_classified_gen+=1
     #count number of correctly classified impostors
     for el in impostors:
-        if el > treshold/1000:
+        if el > treshold:
             correctly_classified_imp+=1
     
     classification_acc.append((correctly_classified_gen + correctly_classified_imp)/(len(genuine) + len(impostors)))
@@ -68,3 +69,26 @@ print("recall is : " + str(recall[indeks]))
 print("f1 is : " + str(f1[indeks]))
 
 
+genuine_frequency= []
+genuine_count = []
+
+
+impostors_frequency= []
+impostors_count = []
+
+#create frequency and count
+for i in range(0, int(max(genuine))+1):
+    #calculate share (frequency) of genuines with each bozoroth scores 
+    genuine_frequency.append(genuine.count(i))
+    genuine_count.append(i)
+
+    #same for impostors
+for i in range(0, int(max(impostors))+1):
+    impostors_frequency.append(impostors.count(i))
+    impostors_count.append(i)
+
+plt.plot(genuine_count, genuine_frequency,label="genuines")
+plt.plot(impostors_count, impostors_frequency, label="impostors")
+
+plt.legend()
+plt.show()

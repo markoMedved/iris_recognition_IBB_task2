@@ -10,6 +10,7 @@ import math
 from math import pi
 from torchvision import models
 from modules.network import *
+from matplotlib import pyplot as plt
 
 
 @torch.inference_mode()
@@ -18,30 +19,19 @@ def extractIBBCode( polar,mask,R=1,P=8,W=8): #, mask):
     if polar is None:
         return None
         
-    #image dims
+    #image dimensions
     height, width = np.array(polar).shape
-    #matrix with at the end decimal coddes
+    #matrix with all the end decimal codes
     lbp_riu2 = np.zeros((height,width), np.int8)
-    #var mtx
+    #variance matrix
     var_mtx = np.zeros((height, width), dtype=np.float32)
-
-
 
     #which pixels around center px
     steps = []
-
-
-    #LPB 8,1
     for i in range(P):
         steps.append((int(round(R*np.cos(2*np.pi*(i+1)/P),0)),int(round(R*np.sin(2*np.pi*(i+1)/P),0))))
+    
         
-    #amout of bins in the histogram
-    lbp_bins = P+2
-    var_bins = 10
-
-    #histogram
-    joint_histogram = np.zeros((lbp_bins, var_bins), dtype=int)
-
     #through image
     for i in range(height):
         for j in range(width):
@@ -58,7 +48,7 @@ def extractIBBCode( polar,mask,R=1,P=8,W=8): #, mask):
             pixels = []
             for s in steps:
                 #if center px is on the border
-                if i+s[0] > 0 and i+s[0] < height and j+s[1] > 0 and j+s[1] < width:
+                if i+s[0] >= 0 and i+s[0] < height and j+s[1] >= 0 and j+s[1] < width:
                     pixel = polar[i+s[0]][j+s[1]]
                     pixels.append(pixel)
                     
@@ -73,109 +63,81 @@ def extractIBBCode( polar,mask,R=1,P=8,W=8): #, mask):
 
             #riu2 - smallest rotation, if uniform, else P+1
             #get all 0/1 changes in pattern (to check uniformity)
-            if sum((binary[i] != binary[(i+i) % P] for i in range(P))) <=2:
-                
-                val = sum(binary)
+            if sum((binary[i] != binary[(i+1) % P] for i in range(P))) <=2:
+
                 lbp_riu2[i,j] = sum(binary)
                 
             else:
-                val = P+1
                 lbp_riu2[i,j] = P+1
 
+            #append var to var mtx
             pixels = np.array(pixels)
             mew = np.mean(pixels)
             var = np.mean((pixels - mew)**2)
             var_mtx[i,j] = var         
-            
-            var = (var * (var_bins - 1) / np.max(var_mtx)).astype(int)
-            #joint_histogram[val, var]+=1
 
     
+    #amount of bins in the histogram
+    lbp_bins = P+2
+    var_bins = 50
 
-    lbp_riu2 = np.array(lbp_riu2)
-
-    var_mtx = np.array(var_mtx)
+    #assign values to bins for the variance matrix
+    var_mtx = np.clip(var_mtx,None,np.percentile(var_mtx, 99))
+    
     var_mtx = (var_mtx * (var_bins - 1) / np.max(var_mtx)).astype(int)
     var_mtx = var_mtx.astype(int)
 
+    window_size_x = height // int(np.sqrt(W))
+    window_size_y = width // int(np.sqrt(W))
+    joint_histogram = []
+    for wx in range(0, height, window_size_x):
+        for wy in range(0, width, window_size_y):
+            # Define the window boundaries
+            end_x = min(wx + window_size_x, height)
+            end_y = min(wy + window_size_y, width)
 
+            histogram = np.zeros((lbp_bins, var_bins), np.int32)
 
-    joint_histogram = np.zeros((lbp_bins, var_bins), dtype=int)
-    for i in range(height):
-        for j in range(width):
-            if mask[i][j] == 0:
-                continue
-            lbp_val = lbp_riu2[i, j]
-            var_val = var_mtx[i, j]
-            joint_histogram[lbp_val, var_val] += 1
-
-    """"
-    num_windows = (W,W)
-    window_height = height // num_windows[0]
-    window_width = width // num_windows[1]
-
+            #make a 2D histogram from lbp_riu2 and var_mtx
+            for i in range(wx, end_x):
+                for j in range(wy, end_y):
+                    if mask[i][j] == 0:
+                        continue
+                    lbp_val = lbp_riu2[i, j]
+                    var_val = var_mtx[i, j]
+                    histogram[lbp_val, var_val] += 1
+            histogram = histogram.flatten()
+            joint_histogram.extend(histogram)
     
+    return joint_histogram
 
-    histograms = []
-
-
-    for i in range(num_windows[0]):
-        for j in range(num_windows[1]):
-            window = lbp_riu2[i*window_height:(i+1)*window_height, j*window_width:(j+1)*window_width]
-            histogram,_ = np.histogram(window.ravel(), bins=num_bins-1)
-            if np.count_nonzero(histogram) > 1:
-                histograms.extend(histogram)
-            else:
-                histograms.extend(np.zeros(len(histogram)))
-    """
-
-
-    feature_vector = joint_histogram.flatten()
-    feature_vector = feature_vector 
-
-    return feature_vector
-
-
-@torch.inference_mode()
-def matchIBBCodes( codes1, codes2): #, mask1, mask2):
-    score = 0.0
-
-    for i in range(len(codes1)):
-
-        score += (codes1[i] - codes2[i]) ** 2 / (codes1[i] + codes2[i] + 1e-8) 
-
-    
-    return score
-
-
-
-
-def calculate_distance(feature_vector1,feature_vector2):
+def calculate_distance(feature_vector1, feature_vector2):
     score = 0.0
 
     for i in range(len(feature_vector1)):
-    
-        score += (feature_vector1[i] - feature_vector2[i]) ** 2 / (feature_vector1[i] + feature_vector2[i] + 1e-8) 
+        score += (feature_vector1[i] - feature_vector2[i]) ** 2 / (
+            feature_vector1[i] + feature_vector2[i] + 1e-8
+        )
     return score
 
 
-filename="data/1_1L_s_1.jpg"
-mask_filename = "masks/1_1L_s_1_seg_mask.png"
+filename = "images_polar/1_1L_s_1_im_polar.png"
+mask_filename = "masks_polar/1_1L_s_1_mask_polar.png"
 polar = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
 mask = cv2.imread(mask_filename, cv2.IMREAD_GRAYSCALE)
-polar = cv2.resize(polar, (640, 480), interpolation=cv2.INTER_NEAREST_EXACT)
+# polar = cv2.resize(polar, (640, 480), interpolation=cv2.INTER_NEAREST_EXACT)
 
-feature_vector1 = extractIBBCode(polar,mask)
+feature_vector1 = extractIBBCode(polar, mask)
 
 
-
-filename="data/1_1L_s_4.jpg"
-mask_filename = "masks/1_1L_s_4_seg_mask.png"
+filename = "images_polar/2_2L_s_2_im_polar.png"
+mask_filename = "masks_polar/2_2L_s_2_mask_polar.png"
 polar = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
 mask = cv2.imread(mask_filename, cv2.IMREAD_GRAYSCALE)
-polar = cv2.resize(polar, (640, 480), interpolation=cv2.INTER_NEAREST_EXACT)
+# polar = cv2.resize(polar, (640, 480), interpolation=cv2.INTER_NEAREST_EXACT)
 
-feature_vector2 = extractIBBCode(polar,mask)
+feature_vector2 = extractIBBCode(polar, mask)
 
 
-print(calculate_distance(feature_vector1,feature_vector2))
+print(calculate_distance(feature_vector1, feature_vector2))
+

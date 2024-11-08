@@ -244,47 +244,31 @@ class irisRecognition(object):
 
         return image_polar, mask_polar
 
+    # implemented the  LBP riu2 code extraction(as in the paper)
+    # which includes cheching for uniformity, and then calculating the sum of bits in the binnary pattern -> getting 8 different values(8 bins in histogram),
+    # and then calculating the variance of the pixels around the center pixel and set the number of bins to 50
+    # then I divided the image into W windows and created a 2D histogram from the LBP riu2 and variance matrices, for each window
+    # and then I created a joint histogram from all the windows histograms
+    # for the the matching I used chi-squared distance
+    # I also checked which R -radius, P - number of neighbour pixels and W  - number of windows, yield the best f1 score
     @torch.inference_mode()
-    def extractCode(self, polar):
-        if polar is None:
-            return None
-        codeBinaries = []
-        for filter_size, torch_filter in zip(self.filter_sizes, self.torch_filters):
-            r = int(np.floor(filter_size / 2))
-            polar_t = torch.tensor(polar).float().unsqueeze(0).unsqueeze(0).to(self.device)
-            padded_polar = nn.functional.pad(polar_t, (r, r, 0, 0), mode='circular')
-            codeContinuous = nn.functional.conv2d(padded_polar, torch_filter)
-            codeBinary = torch.where(codeContinuous.squeeze(0) > 0, True, False)
-            codeBinaries.append(codeBinary.cpu().numpy())
-        return codeBinaries
-    
-    @torch.inference_mode()
-    def extractIBBCode(self, polar,mask,R=1,P=8,W=8): #, mask):
-    
+    def extractIBBCode( self,polar,mask,R=1,P=8,W=8):
+
         if polar is None:
             return None
             
-        #image dims
+        #image dimensions
         height, width = np.array(polar).shape
-        #matrix with at the end decimal coddes
+        #matrix with all the end decimal codes
         lbp_riu2 = np.zeros((height,width), np.int8)
-        #var mtx
+        #variance matrix
         var_mtx = np.zeros((height, width), dtype=np.float32)
-
-
 
         #which pixels around center px
         steps = []
-        #LPB 8,1
         for i in range(P):
             steps.append((int(round(R*np.cos(2*np.pi*(i+1)/P),0)),int(round(R*np.sin(2*np.pi*(i+1)/P),0))))
-
-
-
-        #amount of bins in the histogram
-        lbp_bins = P+2
-        var_bins = 10
-       
+        
             
         #through image
         for i in range(height):
@@ -302,7 +286,7 @@ class irisRecognition(object):
                 pixels = []
                 for s in steps:
                     #if center px is on the border
-                    if i+s[0] > 0 and i+s[0] < height and j+s[1] > 0 and j+s[1] < width:
+                    if i+s[0] >= 0 and i+s[0] < height and j+s[1] >= 0 and j+s[1] < width:
                         pixel = polar[i+s[0]][j+s[1]]
                         pixels.append(pixel)
                         
@@ -317,72 +301,61 @@ class irisRecognition(object):
 
                 #riu2 - smallest rotation, if uniform, else P+1
                 #get all 0/1 changes in pattern (to check uniformity)
-                if sum((binary[i] != binary[(i+i) % P] for i in range(P))) <=2:
+                if sum((binary[i] != binary[(i+1) % P] for i in range(P))) <=2:
 
                     lbp_riu2[i,j] = sum(binary)
                     
                 else:
                     lbp_riu2[i,j] = P+1
 
+                #append var to var mtx
                 pixels = np.array(pixels)
                 mew = np.mean(pixels)
                 var = np.mean((pixels - mew)**2)
                 var_mtx[i,j] = var         
 
-    
-        lbp_riu2 = np.array(lbp_riu2)
+        
+        #amount of bins in the histogram
+        lbp_bins = P+2
+        var_bins = 50
 
-        var_mtx = np.array(var_mtx)
+        #assign values to bins for the variance matrix - PROBAJ ŠE BREZ
+        var_mtx = np.clip(var_mtx,None,np.percentile(var_mtx, 99))
+        
         var_mtx = (var_mtx * (var_bins - 1) / np.max(var_mtx)).astype(int)
         var_mtx = var_mtx.astype(int)
-    
 
+        window_size_x = height // int(np.sqrt(W))
+        window_size_y = width // int(np.sqrt(W))
+        joint_histogram = []
+        for wx in range(0, height, window_size_x):
+            for wy in range(0, width, window_size_y):
+                # Define the window boundaries
+                end_x = min(wx + window_size_x, height)
+                end_y = min(wy + window_size_y, width)
 
-        joint_histogram = np.zeros((lbp_bins, var_bins), dtype=int)
-        for i in range(height):
-            for j in range(width):
-                if mask[i][j] == 0:
-                    continue
-                lbp_val = lbp_riu2[i, j]
-                var_val = var_mtx[i, j]
-                joint_histogram[lbp_val, var_val] += 1
+                histogram = np.zeros((lbp_bins, var_bins), np.int32)
 
-        """"
-        num_windows = (W,W)
-        window_height = height // num_windows[0]
-        window_width = width // num_windows[1]
-
+                #make a 2D histogram from lbp_riu2 and var_mtx
+                for i in range(wx, end_x):
+                    for j in range(wy, end_y):
+                        if mask[i][j] == 0:
+                            continue
+                        lbp_val = lbp_riu2[i, j]
+                        var_val = var_mtx[i, j]
+                        histogram[lbp_val, var_val] += 1
+                histogram = histogram.flatten()
+                joint_histogram.extend(histogram)
         
-
-        histograms = []
-
-
-        for i in range(num_windows[0]):
-            for j in range(num_windows[1]):
-                window = lbp_riu2[i*window_height:(i+1)*window_height, j*window_width:(j+1)*window_width]
-                histogram,_ = np.histogram(window.ravel(), bins=num_bins-1)
-                if np.count_nonzero(histogram) > 1:
-                    histograms.extend(histogram)
-                else:
-                    histograms.extend(np.zeros(len(histogram)))
-        """
-
-
-        feature_vector = joint_histogram.flatten()
-        feature_vector = feature_vector 
-
-        return feature_vector
-
+        return joint_histogram
 
     @torch.inference_mode()
     def matchIBBCodes(self, codes1, codes2): #, mask1, mask2):
         score = 0.0
 
         for i in range(len(codes1)):
-    
-            score += (codes1[i] - codes2[i]) ** 2 / (codes1[i] + codes2[i] + 1e-8) 
+            score += (codes1[i] - codes2[i]) ** 2 / (codes1[i] + codes2[i] + 1e-8)
 
-       
         return score
 
 

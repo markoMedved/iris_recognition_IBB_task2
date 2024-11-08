@@ -36,38 +36,27 @@ def main(cfg):
     for filename in glob.glob("./masks_polar/*.png" ):
         pol_mask = cv2.imread(filename,cv2.IMREAD_GRAYSCALE)
         polar_mask_list.append(pol_mask)
-    
-    #polar_mask_list = []
-    #polar_image_list = []
-    #for ext in extensions:
-     #  for filename in glob.glob("./data/*." + ext):
-      #      pol_im = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-       #     pol_im = cv2.resize(pol_im, (640, 480), interpolation=cv2.INTER_NEAREST_EXACT)
-            #polar_image_list.append(pol_im)
-   
-    #for filename in glob.glob("./masks/*.png" ):
-     #   pol_mask = cv2.imread(filename,cv2.IMREAD_GRAYSCALE)
-      #  polar_mask_list.append(pol_mask)
 
 
     print(len(polar_image_list))
     print(len(polar_mask_list))
 
+    for W in [8,16]:
+        for P,R in zip([16,24], [2,3]):
+        
+            code_list = []
+            for im_polar,mask_polar in zip(polar_image_list,polar_mask_list):
+                
 
-    for P,R in zip([4], [2]):#,8, 12,16,24],  [1,1,1.5,2,3]):#,12,16,24], [1,1,1.5,2,3]):
-    
-        code_list = []
-        for im_polar,mask_polar in zip(polar_image_list,polar_mask_list):
-            
+                # human-driven BSIF encoding:
+                #code = irisRec.extractCode(im_polar)
+                # TODO:
+                code = irisRec.extractIBBCode(im_polar, mask_polar, R=R, P=P, W=W) 
 
-            # human-driven BSIF encoding:
-            #code = irisRec.extractCode(im_polar)
-            # TODO:
-            code = irisRec.extractIBBCode(im_polar, mask_polar, R=R, P=P)  #[, mask]) < masks are up to you where to use them
+                code_list.append(code)
+                
 
-            code_list.append(code)
-
-        with open('results4/resultsIBB' +"P"+ str(P) +"R"+str(R) +"W"+ '.txt', 'w') as f:
+        with open('results4_riu2_multiple_windows/resultsIBB' +"P"+ str(P) +"R"+str(R) +"W"+ str(W)+'.txt', 'w') as f:
             for code1,fn1,i in zip(code_list,filename_list,range(len(code_list))):
                 for code2,fn2,j in zip(code_list,filename_list,range(len(code_list))):
                     if i < j:
