@@ -41,8 +41,8 @@ def main(cfg):
     print(len(polar_image_list))
     print(len(polar_mask_list))
 
-    for W in [8,16]:
-        for P,R in zip([16,24], [2,3]):
+    for W in [16]:
+        for P,R in zip([24], [3]):
         
             code_list = []
             for im_polar,mask_polar in zip(polar_image_list,polar_mask_list):
@@ -56,7 +56,7 @@ def main(cfg):
                 code_list.append(code)
                 
 
-        with open('results4_riu2_multiple_windows/resultsIBB' +"P"+ str(P) +"R"+str(R) +"W"+ str(W)+'.txt', 'w') as f:
+        with open('results4_riu2_multiple_windows/resultsIBB' +"P"+ str(P) +"R"+str(R) +"W"+ str(W)+'bins20.txt', 'w') as f:
             for code1,fn1,i in zip(code_list,filename_list,range(len(code_list))):
                 for code2,fn2,j in zip(code_list,filename_list,range(len(code_list))):
                     if i < j:

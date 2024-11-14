@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 result_locations = []
-for W in [4,8,16]:#,16]:
-    for P,R in zip([16], [1.5]):#, 16], [1,2]):
-        result_locations.append("results4_riu2_multiple_windows/resultsIBB"+ "P"+str(P)+"R"+str(R)+"W" + str(W)+".txt")
+for W in [16]:#,16]:t
+    for P,R in zip([24], [3]):#, 16], [1,2]):
+        result_locations.append("results4_riu2_multiple_windows/resultsIBB"+ "P"+str(P)+"R"+str(R)+"W" + str(W)+'bins10.txt')
 
 for result_location in result_locations:
     lines = []
@@ -13,7 +13,6 @@ for result_location in result_locations:
 
     file.close()
 
-    
 
     genuine = []
     impostors = []
@@ -79,7 +78,7 @@ for result_location in result_locations:
         f1.append((2*prec[-1]*recall[-1])/(prec[-1] + recall[-1] + 0.00000001) )
     
     indeks = f1.index(max(f1))
-    print(len(f1))
+    
     best_treshold = x + indeks*step
     
     print("for the file: " + result_location )
@@ -99,15 +98,15 @@ impostors_frequency= []
 impostors_count = []
 
 #create frequency and count
-#for i in range(0, int(max(genuine))+1):
+for i in range(0, int(max(genuine))+1):
     #calculate share (frequency) of genuines with each bozoroth scores 
- #   genuine_frequency.append(genuine.count(i))
-  #  genuine_count.append(i)
+    genuine_frequency.append(genuine.count(i))
+    genuine_count.append(i)
 
     #same for impostors
-#for i in range(0, int(max(impostors))+1):
-   # impostors_frequency.append(impostors.count(i))
-    #impostors_count.append(i)
+for i in range(0, int(max(impostors))+1):
+    impostors_frequency.append(impostors.count(i))
+    impostors_count.append(i)
 
 #plt.plot(genuine_count, genuine_frequency,label="genuines")
 #plt.plot(impostors_count, impostors_frequency, label="impostors")

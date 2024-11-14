@@ -13,7 +13,7 @@ from modules.network import *
 from matplotlib import pyplot as plt
 
 
-def extractIBBCode(polar, mask, R=1, P=8, W=8):
+def extractIBBCode(polar, mask, R=3, P=24, W=32):
     height, width = np.array(polar).shape
 
     steps = [(int(round(R * np.cos(2 * np.pi * (i + 3) / P), 0)),

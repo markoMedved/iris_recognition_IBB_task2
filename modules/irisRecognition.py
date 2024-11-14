@@ -245,14 +245,15 @@ class irisRecognition(object):
         return image_polar, mask_polar
 
     # implemented the  LBP riu2 code extraction(as in the paper)
-    # which includes cheching for uniformity, and then calculating the sum of bits in the binnary pattern -> getting 8 different values(8 bins in histogram),
+    # which includes checking for uniformity, and then calculating the sum of bits in the binnary pattern (if uniform, else return the value P+1) -> getting P+2 different values(P +2 bins in histogram),
     # and then calculating the variance of the pixels around the center pixel and set the number of bins to 50
     # then I divided the image into W windows and created a 2D histogram from the LBP riu2 and variance matrices, for each window
-    # and then I created a joint histogram from all the windows histograms
+    # and then I created a joint histogram from all the windows histograms (just concatenated them)
     # for the the matching I used chi-squared distance
-    # I also checked which R -radius, P - number of neighbour pixels and W  - number of windows, yield the best f1 score
+    # I also checked which R -radius, P - number of neighbour pixels and W  - number of windows, yield the best f1 score (written in the keyword arguments)
+    # treshold for the best f1 score for my tests was 3656
     @torch.inference_mode()
-    def extractIBBCode( self,polar,mask,R=1,P=8,W=8):
+    def extractIBBCode(self,polar,mask,R=3,P=24,W=16):
 
         if polar is None:
             return None
@@ -273,7 +274,7 @@ class irisRecognition(object):
         #through image
         for i in range(height):
             for j in range(width):
-                #if mask = 0, then just append 0
+                #if mask = 0, then just skip pixel
                 if mask[i][j] == 0:
                     continue
                     
@@ -317,16 +318,19 @@ class irisRecognition(object):
         
         #amount of bins in the histogram
         lbp_bins = P+2
-        var_bins = 50
+        var_bins = 10
 
-        #assign values to bins for the variance matrix - PROBAJ ŠE BREZ
+        #assign values to bins for the variance matrix
         var_mtx = np.clip(var_mtx,None,np.percentile(var_mtx, 99))
         
         var_mtx = (var_mtx * (var_bins - 1) / np.max(var_mtx)).astype(int)
         var_mtx = var_mtx.astype(int)
 
+        #get window sizes from the number of windows, and image dimensions
         window_size_x = height // int(np.sqrt(W))
         window_size_y = width // int(np.sqrt(W))
+
+        #build the 2D histogram, for each window
         joint_histogram = []
         for wx in range(0, height, window_size_x):
             for wy in range(0, width, window_size_y):
@@ -344,13 +348,15 @@ class irisRecognition(object):
                         lbp_val = lbp_riu2[i, j]
                         var_val = var_mtx[i, j]
                         histogram[lbp_val, var_val] += 1
+
                 histogram = histogram.flatten()
                 joint_histogram.extend(histogram)
         
         return joint_histogram
 
     @torch.inference_mode()
-    def matchIBBCodes(self, codes1, codes2): #, mask1, mask2):
+    def matchIBBCodes(self, codes1, codes2):
+        #match the codes with the chi-squared distance
         score = 0.0
 
         for i in range(len(codes1)):
